@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/panjf2000/ants/v2"
 	"io"
 	"math"
 	"net"
@@ -741,10 +742,10 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 	var wg sync.WaitGroup
 	st.HandleStreams(func(stream *transport.Stream) {
 		wg.Add(1)
-		go func() {
+		ants.Submit(func() {
 			defer wg.Done()
 			s.handleStream(st, stream, s.traceInfo(st, stream))
-		}()
+		})
 	}, func(ctx context.Context, method string) context.Context {
 		if !EnableTracing {
 			return ctx
