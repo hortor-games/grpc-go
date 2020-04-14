@@ -1298,6 +1298,7 @@ func (t *http2Client) reader() {
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
 			t.operateHeaders(frame)
+			http2.Free(frame)
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:

@@ -480,7 +480,9 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			if t.operateHeaders(frame, handle, traceCtx) {
+			fatal := t.operateHeaders(frame, handle, traceCtx)
+			http2.Free(frame)
+			if fatal {
 				t.Close()
 				break
 			}
