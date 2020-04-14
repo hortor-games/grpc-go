@@ -106,8 +106,13 @@ type Server struct {
 	channelzRemoveOnce sync.Once
 	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
-	channelzID int64 // channelz unique identification number
-	czData     *channelzData
+	channelzID       int64 // channelz unique identification number
+	czData           *channelzData
+	responseRecycler func(data interface{})
+}
+
+func (s *Server) SetResponseRecycler(recycler func(data interface{})) {
+	s.responseRecycler = recycler
 }
 
 type serverOptions struct {
@@ -868,6 +873,9 @@ func (s *Server) incrCallsFailed() {
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
+	if s.responseRecycler != nil {
+		s.responseRecycler(msg)
+	}
 	if err != nil {
 		channelz.Error(s.channelzID, "grpc: server failed to encode response: ", err)
 		return err
