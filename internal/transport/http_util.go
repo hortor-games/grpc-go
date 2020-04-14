@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -144,6 +145,26 @@ type decodeState struct {
 	// frame once decodeHeader function has been invoked and returned.
 	data parsedHeaderData
 }
+
+var decodeStatePool = NewAutoPool(
+	func() interface{} {
+		d := &decodeState{}
+		d.data.mdata = make(map[string][]string, 10)
+		return d
+	},
+	func(data interface{}) {
+		d := data.(*decodeState)
+		mdata := d.data.mdata
+		d.data = parsedHeaderData{}
+		if mdata != nil {
+			for k, v := range mdata {
+				freeMetadata(&v)
+				delete(mdata, k)
+			}
+		}
+		d.data.mdata = mdata
+	},
+)
 
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
 // reserved by gRPC protocol. Any other headers are classified as the
@@ -330,11 +351,29 @@ func (d *decodeState) constructHTTPErrMsg() string {
 	return strings.Join(errMsgs, "; ")
 }
 
+var metadataPool = sync.Pool{
+	New: func() interface{} {
+		s := make([]string, 0, 2)
+		return &s
+	},
+}
+
+func freeMetadata(d *[]string) {
+	*d = (*d)[:0]
+	metadataPool.Put(d)
+}
+
 func (d *decodeState) addMetadata(k, v string) {
-	if d.data.mdata == nil {
-		d.data.mdata = make(map[string][]string)
+	//if d.data.mdata == nil {
+	//	d.data.mdata = make(map[string][]string)
+	//}
+	//d.data.mdata[k] = append(d.data.mdata[k], v)
+	meta := d.data.mdata[k]
+	if meta == nil {
+		meta = *(metadataPool.Get().(*[]string))
 	}
-	d.data.mdata[k] = append(d.data.mdata[k], v)
+	meta = append(meta, v)
+	d.data.mdata[k] = meta
 }
 
 func (d *decodeState) processHeaderField(f hpack.HeaderField) {
