@@ -1065,6 +1065,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		t.IncrMsgRecv()
 	}
 	df := func(v interface{}) error {
+		defer freeBytes(d)
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}

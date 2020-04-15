@@ -602,6 +602,7 @@ func (l *loopyWriter) registerStreamHandler(h *registerStream) error {
 }
 
 func (l *loopyWriter) headerHandler(h *headerFrame) error {
+	defer freeHeaderField(h.hf)
 	if l.side == serverSide {
 		str, ok := l.estdStreams[h.streamID]
 		if !ok {
