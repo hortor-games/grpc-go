@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/panjf2000/ants/v2"
 	"io"
 	"math"
 	"net"
@@ -105,8 +106,13 @@ type Server struct {
 	channelzRemoveOnce sync.Once
 	serveWG            sync.WaitGroup // counts active Serve goroutines for GracefulStop
 
-	channelzID int64 // channelz unique identification number
-	czData     *channelzData
+	channelzID       int64 // channelz unique identification number
+	czData           *channelzData
+	responseRecycler func(data interface{})
+}
+
+func (s *Server) SetResponseRecycler(recycler func(data interface{})) {
+	s.responseRecycler = recycler
 }
 
 type serverOptions struct {
@@ -741,10 +747,10 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 	var wg sync.WaitGroup
 	st.HandleStreams(func(stream *transport.Stream) {
 		wg.Add(1)
-		go func() {
+		ants.Submit(func() {
 			defer wg.Done()
 			s.handleStream(st, stream, s.traceInfo(st, stream))
-		}()
+		})
 	}, func(ctx context.Context, method string) context.Context {
 		if !EnableTracing {
 			return ctx
@@ -867,6 +873,9 @@ func (s *Server) incrCallsFailed() {
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
+	if s.responseRecycler != nil {
+		s.responseRecycler(msg)
+	}
 	if err != nil {
 		channelz.Error(s.channelzID, "grpc: server failed to encode response: ", err)
 		return err
@@ -1056,6 +1065,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		t.IncrMsgRecv()
 	}
 	df := func(v interface{}) error {
+		defer freeBytes(d)
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}

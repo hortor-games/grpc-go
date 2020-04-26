@@ -420,7 +420,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	// Make the slice of certain predictable size to reduce allocations made by append.
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
 	hfLen += len(authData) + len(callAuthData)
-	headerFields := make([]hpack.HeaderField, 0, hfLen)
+	headerFields := newHeaderFields()
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: "POST"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":scheme", Value: t.scheme})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":path", Value: callHdr.Method})
@@ -1298,6 +1298,7 @@ func (t *http2Client) reader() {
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
 			t.operateHeaders(frame)
+			http2.Free(frame)
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:

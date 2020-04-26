@@ -525,11 +525,12 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	}
 	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
 	// of making it for each message:
-	msg = make([]byte, int(length))
+	msg = newBytes(int(length))// make([]byte, int(length))
 	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
+		freeBytes(msg)
 		return 0, nil, err
 	}
 	return pf, msg, nil
@@ -707,6 +708,7 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 // TODO(dfawley): wrap the old compressor/decompressor using the new API?
 func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interface{}, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) error {
 	d, err := recvAndDecompress(p, s, dc, maxReceiveMessageSize, payInfo, compressor)
+	defer freeBytes(d)
 	if err != nil {
 		return err
 	}
